@@ -1,0 +1,92 @@
+version: "3.4"
+services:
+  graffiti:
+    image: ramirond/graffiti:rp
+    container_name: ${COMPOSE_PROJECT_NAME}_graffiti
+    restart: unless-stopped
+    volumes:
+      - ./data/graffiti.txt:/graffiti.txt
+    environment:
+      - ROCKET_POOL_VERSION=${ROCKET_POOL_VERSION}
+    networks:
+      - net
+    command: "--client $VALIDATOR_CLIENT --out-file /graffiti.txt --eth2-url eth2 --eth2-port 5052"
+  validator:
+    image: ${VALIDATOR_IMAGE}
+    user: root
+    container_name: ${COMPOSE_PROJECT_NAME}_validator
+    restart: unless-stopped
+    stop_grace_period: 3m
+    volumes:
+      - ./data/validators:/validators
+      - ./chains/eth2:/setup:ro
+      - ./data/graffiti.txt:/graffiti.txt
+    networks:
+      - net
+    environment:
+      - CLIENT=${VALIDATOR_CLIENT}
+      - ETH2_PROVIDER=${ETH2_PROVIDER}
+      - CUSTOM_GRAFFITI=${CUSTOM_GRAFFITI}
+      - ROCKET_POOL_VERSION=${ROCKET_POOL_VERSION}
+      - ENABLE_METRICS=${ENABLE_METRICS}
+      - VALIDATOR_METRICS_PORT=${VALIDATOR_METRICS_PORT}
+    entrypoint: sh
+    command: "/setup/start-validator.sh"
+    cap_drop:
+      - all
+    cap_add:
+      - dac_override
+    security_opt:
+      - no-new-privileges
+  api:
+    image: ${SMARTNODE_IMAGE}
+    container_name: ${COMPOSE_PROJECT_NAME}_api
+    restart: unless-stopped
+    stop_signal: SIGKILL
+    stop_grace_period: 1s
+    volumes:
+      - .:/.rocketpool
+    networks:
+      - net
+    entrypoint: /bin/sleep
+    command: "infinity"
+    cap_drop:
+      - all
+    cap_add:
+      - dac_override
+    security_opt:
+      - no-new-privileges
+  node:
+    image: ${SMARTNODE_IMAGE}
+    container_name: ${COMPOSE_PROJECT_NAME}_node
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/.rocketpool
+    networks:
+      - net
+    command: "-m 0.0.0.0 -r ${NODE_METRICS_PORT:-9102} node"
+    cap_drop:
+      - all
+    cap_add:
+      - dac_override
+    security_opt:
+      - no-new-privileges
+  watchtower:
+    image: ${SMARTNODE_IMAGE}
+    container_name: ${COMPOSE_PROJECT_NAME}_watchtower
+    restart: unless-stopped
+    volumes:
+      - .:/.rocketpool
+    networks:
+      - net
+    command: "-m 0.0.0.0 -r ${WATCHTOWER_METRICS_PORT:-9104} watchtower"
+    cap_drop:
+      - all
+    cap_add:
+      - dac_override
+    security_opt:
+      - no-new-privileges
+networks:
+  net:
+    external: true
